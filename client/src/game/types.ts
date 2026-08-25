@@ -58,6 +58,9 @@ export interface UIState {
   unlockedCharacters: number[];
   musicEnabled: boolean;
   shieldSeconds: number;
+  nileRushSeconds: number;
+  contractProgress: number;
+  contractTarget: number;
   canRevive: boolean;
   interstitialReady: boolean;
   message: string | null;

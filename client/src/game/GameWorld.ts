@@ -45,11 +45,15 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
   private obstacles: MovingEntity[] = [];
   private coins: MovingEntity[] = [];
   private shields: MovingEntity[] = [];
+  private rushPads: MovingEntity[] = [];
   private inputStart: { x: number; y: number } | null = null;
   private laneIndex = 1;
   private playerY = 0;
   private verticalVelocity = 0;
   private shieldSeconds = 0;
+  private nileRushSeconds = 0;
+  private contractProgress = 0;
+  private readonly contractTarget = 6;
   private scoreDistance = 0;
   private runCoins = 0;
   private speed = 15;
@@ -73,8 +77,8 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     this.createPools();
     this.bindInput(canvas);
     this.scene.onBeforeRenderObservable.add(() => this.update());
-    this.emitState();
-    if (this.demo) window.setTimeout(() => this.start(), 350);
+    if (this.demo) this.start();
+    else this.emitState();
   }
 
   get handle(): GameHandle {
@@ -131,6 +135,13 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     const laneMat = this.makeMaterial("lane-mat", "#173A48", "#42E8FF");
     const railMat = this.makeMaterial("rail-mat", "#253144", "#132C42");
     const magentaMat = this.makeMaterial("billboard-mat", "#23122D", "#FF4FD8");
+    const nileMat = this.makeMaterial("nile-mat", "#071C39", "#0B4E82");
+    const sandstoneMat = this.makeMaterial("cairo-tower-mat", "#30324A", "#332745");
+    const towerLight = this.makeMaterial("cairo-tower-light", "#0C6179", "#42E8FF");
+
+    const nile = MeshBuilder.CreateGround("nile-water", { width: 18, height: 220, subdivisions: 2 }, this.scene);
+    nile.position.set(18, -0.37, 64);
+    nile.material = nileMat;
 
     for (let i = 0; i < ROAD_SEGMENTS; i += 1) {
       const segment = new TransformNode(`road-${i}`, this.scene);
@@ -165,6 +176,24 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
       this.roadSegments.push(segment);
     }
 
+    const cairoTower = new TransformNode("cairo-tower", this.scene);
+    cairoTower.position.set(-17.5, 0, 68);
+    const towerBase = MeshBuilder.CreateCylinder("cairo-tower-base", { height: 11, diameterTop: 1.45, diameterBottom: 3.15, tessellation: 20 }, this.scene);
+    towerBase.parent = cairoTower;
+    towerBase.position.y = 5.2;
+    towerBase.material = sandstoneMat;
+    const towerCrown = MeshBuilder.CreateCylinder("cairo-tower-crown", { height: 2.3, diameterTop: 0.26, diameterBottom: 1.5, tessellation: 20 }, this.scene);
+    towerCrown.parent = cairoTower;
+    towerCrown.position.y = 11.75;
+    towerCrown.material = towerLight;
+    for (let level = 0; level < 3; level += 1) {
+      const ring = MeshBuilder.CreateTorus(`cairo-tower-ring-${level}`, { diameter: 2.05 - level * 0.14, thickness: 0.06, tessellation: 20 }, this.scene);
+      ring.parent = cairoTower;
+      ring.position.y = 4.2 + level * 2.05;
+      ring.material = towerLight;
+    }
+    this.cityBlocks.push(cairoTower);
+
     for (let i = 0; i < 22; i += 1) {
       const cluster = new TransformNode(`city-${i}`, this.scene);
       const side = i % 2 === 0 ? -1 : 1;
@@ -178,7 +207,7 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
         billboard.parent = cluster;
         billboard.position.set(-side * 1.7, 3.3, 0);
         billboard.rotation.y = side * Math.PI / 2;
-        billboard.material = magentaMat;
+        billboard.material = i % 8 === 0 ? towerLight : magentaMat;
       }
       this.cityBlocks.push(cluster);
     }
@@ -214,6 +243,7 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     for (let i = 0; i < 12; i += 1) this.obstacles.push(this.makeObstacle(i, i % 2 === 0 ? "barrier" : "drone"));
     for (let i = 0; i < 40; i += 1) this.coins.push(this.makeCoin(i));
     for (let i = 0; i < 4; i += 1) this.shields.push(this.makeShield(i));
+    for (let i = 0; i < 6; i += 1) this.rushPads.push(this.makeNileRush(i));
   }
 
   private makeObstacle(index: number, kind: ObstacleKind): MovingEntity {
@@ -267,6 +297,25 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     return { root, lane: 0, active: false, spin: Math.random() * 4 };
   }
 
+  private makeNileRush(index: number): MovingEntity {
+    const root = new TransformNode(`nile-rush-root-${index}`, this.scene);
+    const riverLight = this.makeMaterial(`nile-rush-mat-${index}`, "#075D83", "#42E8FF");
+    const amber = this.makeMaterial(`nile-rush-amber-${index}`, "#8C6816", "#FFC857");
+    for (let stripe = 0; stripe < 4; stripe += 1) {
+      const panel = MeshBuilder.CreateBox(`nile-rush-panel-${index}-${stripe}`, { width: 2.35, height: 0.055, depth: 0.46 }, this.scene);
+      panel.parent = root;
+      panel.position.set(0, 0.02, stripe * 0.68);
+      panel.material = riverLight;
+    }
+    const crest = MeshBuilder.CreateTorus(`nile-rush-crest-${index}`, { diameter: 0.68, thickness: 0.08, tessellation: 18 }, this.scene);
+    crest.parent = root;
+    crest.position.set(0, 0.1, 1.45);
+    crest.rotation.x = Math.PI / 2;
+    crest.material = amber;
+    root.setEnabled(false);
+    return { root, lane: 0, active: false, spin: Math.random() * 5 };
+  }
+
   private bindInput(canvas: HTMLCanvasElement) {
     const keydown = (event: KeyboardEvent) => {
       if (["ArrowLeft", "a", "A"].includes(event.key)) this.moveLane(-1);
@@ -307,7 +356,8 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     const dt = Math.min(this.scene.getEngine().getDeltaTime() / 1000, 0.05);
     this.updatePlayer(dt);
     if (this.phase !== "run") return;
-    this.speed = Math.min(30, 15 + this.scoreDistance * 0.045);
+    const baseSpeed = Math.min(30, 15 + this.scoreDistance * 0.045);
+    this.speed = Math.min(36, baseSpeed * (this.nileRushSeconds > 0 ? 1.42 : 1));
     this.scoreDistance += this.speed * dt;
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
@@ -317,6 +367,7 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     this.moveWorld(dt);
     this.updateEntities(dt);
     this.shieldSeconds = Math.max(0, this.shieldSeconds - dt);
+    this.nileRushSeconds = Math.max(0, this.nileRushSeconds - dt);
     this.shieldRing.setEnabled(this.shieldSeconds > 0);
     if (this.shieldSeconds > 0) this.shieldRing.rotation.z += dt * 3.2;
     if (this.demo) this.runDemo(dt);
@@ -382,6 +433,13 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
       if (coin.root.position.z < -8) this.hideEntity(coin);
       else if (Math.abs(coin.root.position.z) < 1.2 && Math.abs(coin.root.position.x - this.player.position.x) < 0.82 && Math.abs(this.playerY - 0.1) < 1.7) {
         this.runCoins += 1;
+        this.contractProgress += 1;
+        if (this.contractProgress >= this.contractTarget) {
+          this.contractProgress = 0;
+          this.runCoins += 3;
+          this.message = "CAIRO CONTRACT // +3";
+          this.audio.play("shield");
+        }
         this.hideEntity(coin);
         this.audio.play("coin");
       }
@@ -395,6 +453,18 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
         this.shieldSeconds = 6.5;
         this.hideEntity(shield);
         this.message = "SHIELD ONLINE";
+        this.audio.play("shield");
+      }
+    }
+    for (const rush of this.rushPads) {
+      if (!rush.active) continue;
+      rush.root.position.z -= distance;
+      rush.root.rotation.y = Math.sin(this.scoreDistance * 0.4 + (rush.spin ?? 0)) * 0.035;
+      if (rush.root.position.z < -8) this.hideEntity(rush);
+      else if (Math.abs(rush.root.position.z) < 1.45 && Math.abs(rush.root.position.x - this.player.position.x) < 0.96) {
+        this.nileRushSeconds = 5.2;
+        this.message = "NILE RUSH // FAST LANE";
+        this.hideEntity(rush);
         this.audio.play("shield");
       }
     }
@@ -417,11 +487,13 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
       this.spawnCoins(safeLane, startZ + 2, 5);
     } else if (seed === 3) {
       this.spawnCoins(safeLane, startZ, 6);
+      this.activateNileRush((safeLane + 1) % 3, startZ + 4);
       if (this.scoreDistance > 38) this.activateShield((safeLane + 1) % 3, startZ + 7);
     } else {
       this.activateObstacle((safeLane + 1) % 3, startZ, "drone");
       this.activateShield(safeLane, startZ + 3);
       this.spawnCoins((safeLane + 2) % 3, startZ + 5, 4);
+      this.activateNileRush(safeLane, startZ + 8);
     }
   }
 
@@ -455,6 +527,14 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     entity.root.setEnabled(true);
   }
 
+  private activateNileRush(lane: number, z: number) {
+    const entity = this.getInactive(this.rushPads);
+    entity.lane = lane;
+    entity.active = true;
+    entity.root.position.set(LANES[lane], 0, z);
+    entity.root.setEnabled(true);
+  }
+
   private hideEntity(entity: MovingEntity) {
     entity.active = false;
     entity.root.setEnabled(false);
@@ -470,7 +550,9 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
       else this.jump();
     } else {
       const nearbyCoin = this.coins.find((item) => item.active && item.root.position.z > 4 && item.root.position.z < 19);
-      if (nearbyCoin) this.laneIndex = nearbyCoin.lane;
+      const nearbyRush = this.rushPads.find((item) => item.active && item.root.position.z > 4 && item.root.position.z < 19);
+      if (nearbyRush) this.laneIndex = nearbyRush.lane;
+      else if (nearbyCoin) this.laneIndex = nearbyCoin.lane;
     }
     this.demoTimer = 0.28;
   }
@@ -610,6 +692,8 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
     this.playerY = 0;
     this.verticalVelocity = 0;
     this.shieldSeconds = 0;
+    this.nileRushSeconds = 0;
+    this.contractProgress = 0;
     this.scoreDistance = 0;
     this.runCoins = 0;
     this.speed = 15;
@@ -620,7 +704,7 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
   }
 
   private deactivateAll() {
-    [...this.obstacles, ...this.coins, ...this.shields].forEach((entity) => this.hideEntity(entity));
+    [...this.obstacles, ...this.coins, ...this.shields, ...this.rushPads].forEach((entity) => this.hideEntity(entity));
   }
 
   private canRevive() {
@@ -647,6 +731,9 @@ export class GameWorld implements Omit<GameHandle, "scene" | "dispose"> {
       unlockedCharacters: save.unlockedCharacters,
       musicEnabled: save.musicEnabled,
       shieldSeconds: this.shieldSeconds,
+      nileRushSeconds: this.nileRushSeconds,
+      contractProgress: this.contractProgress,
+      contractTarget: this.contractTarget,
       canRevive: this.canRevive(),
       interstitialReady: this.interstitialReady,
       message: this.message,

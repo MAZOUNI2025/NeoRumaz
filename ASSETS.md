@@ -14,6 +14,10 @@
 | `neorumaz-courier-vanta` | `/manus-storage/neorumaz-courier-vanta_17506b9c.png` | بطاقة الشخصية الافتراضية |
 | `neorumaz-courier-lyra` | `/manus-storage/neorumaz-courier-lyra_eabc52b6.png` | بطاقة شخصية قابلة للفتح |
 | `neorumaz-courier-oren` | `/manus-storage/neorumaz-courier-oren_b5f1c92f.png` | بطاقة شخصية قابلة للفتح |
+| `neorumaz-cairo-menu` | `/manus-storage/neorumaz-cairo-menu_5f2d1ac3.jpg` | خلفية قائمة Nile Circuit المصرية |
+| `neorumaz-nile-garage` | `/manus-storage/neorumaz-nile-garage_80c7869a.jpg` | خلفية Runner Garage المطلة على النيل |
+| `neorumaz-scarab-nile-icon` | `/manus-storage/neorumaz-scarab-nile-icon_d1b62af8.png` | شارة Scarab Shield وNile Rush داخل الـHUD |
+| `neorumaz-cairo-route-panel` | `/manus-storage/neorumaz-cairo-route-panel_660de126.png` | لوحة طريق قاهرية تستخدم كـbillboard وعلامة عقد |
 
 الصورة المرجعية تمثل لقطة لعب فعلية: لاعب courier في الوسط، barrier برتقالي في اليسار، drone magenta في اليمين، صف خمس عملات cyan في الوسط، وshield amber فوق اليسار-الوسط، مع طريق ثلاثي المسارات، مدينة ليلية، HUD للنتيجة والعملات، pause، وhint للقفز.
 
@@ -39,3 +43,7 @@
 | بطاقات الشخصيات | عرض المتجر، مع 3 شخصيات مميزة | منفذ عبر صور Vanta وLyra وOren |
 
 لا تُحفظ ملفات الصور الكبيرة داخل شجرة المشروع النهائية إذا كان WebDev يوفر تخزينًا خارجيًا؛ تُرفع الأصول النهائية إلى تخزين WebDev وتُسجل روابطها هنا بعد الرفع.
+
+## Cairo After Dark
+
+الأصول الجديدة تجعل Cairo/Nile بيئة قابلة للرؤية في القائمة والمتجر والـHUD، بينما تظل عوائق اللعب والعناصر الرئيسية procedural كي تكون قابلة لإعادة التدوير ولا تعتمد على تحميل نماذج كبيرة. يُستخدم رمز scarab كإشارة حماية وظيفية، وتبقى العناصر التراثية مجردة وحديثة حتى لا تتحول البيئة إلى كليشيه سياحي.
