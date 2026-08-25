@@ -12,6 +12,8 @@
 | Android device validation | Not performed | No Android device bridge or emulator is available. |
 | Real advertising | Not integrated | Legacy Unity Ads dependency was removed; no replacement SDK exists. |
 
+The project includes `NeoRumaz > Validate Project Source` under the Unity Editor menu. It also runs as a pre-build check after the local Unity project is opened. This validator has been added to source but cannot be executed in the current environment because Unity Editor is unavailable.
+
 ## Required verification sequence
 
 1. Install Unity 2020.3.26f1 with **Android Build Support**, Android SDK/NDK Tools, and OpenJDK, or upgrade the copied project through Unity Hub and resolve packages.

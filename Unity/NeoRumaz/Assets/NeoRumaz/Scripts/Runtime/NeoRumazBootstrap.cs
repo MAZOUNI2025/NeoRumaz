@@ -44,10 +44,8 @@ namespace NeoRumaz.Runtime
 
     public sealed class NightRunnerGame : MonoBehaviour
     {
-        private const float LaneWidth = 2.8f;
         private const int RoadSegmentCount = 8;
         private const float RoadSegmentLength = 18f;
-        private const int ContractTarget = 6;
 
         private readonly List<Transform> roadSegments = new List<Transform>();
         private readonly List<RunnerItem> items = new List<RunnerItem>();
@@ -65,22 +63,36 @@ namespace NeoRumaz.Runtime
         private float spawnTimer;
         private float shieldSeconds;
         private float nileRushSeconds;
-        private int credits = 248;
+        private ProgressionService progression;
+        private MonetizationService monetization;
+        private GameplayConfiguration config;
+        private MonetizationConfiguration monetizationConfig;
+        private Material courierAccentMaterial;
         private int contractCredits;
         private bool isRunning = true;
         private Vector2 touchStart;
         private bool touchTracking;
 
         public int Score { get { return Mathf.FloorToInt(runDistance * 10f); } }
-        public int Credits { get { return credits; } }
+        public int Credits { get { return progression == null ? 0 : progression.Profile.Credits; } }
         public int ContractCredits { get { return contractCredits; } }
-        public int ContractGoal { get { return ContractTarget; } }
+        public int ContractGoal { get { return config.ContractTargetCredits; } }
         public float ShieldSeconds { get { return shieldSeconds; } }
         public float NileRushSeconds { get { return nileRushSeconds; } }
         public bool IsRunning { get { return isRunning; } }
+        public PlayerProfileData Profile { get { return progression.Profile; } }
+        public CharacterDefinition SelectedCharacter { get { return CharacterCatalog.Get(progression.Profile.SelectedCharacterIndex); } }
+        public bool IsRewardedAvailable { get { return monetization.IsRewardedReady(AdPlacement.RewardedDailyCredits); } }
 
         public void Configure()
         {
+            progression = new ProgressionService();
+            progression.Load();
+            config = Resources.Load<GameplayConfiguration>("NeoRumazGameplayConfiguration");
+            if (config == null) config = ScriptableObject.CreateInstance<GameplayConfiguration>();
+            monetizationConfig = Resources.Load<MonetizationConfiguration>("NeoRumazMonetizationConfiguration");
+            if (monetizationConfig == null) monetizationConfig = ScriptableObject.CreateInstance<MonetizationConfiguration>();
+            monetization = new MonetizationService(monetizationConfig);
             RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = new Color(0.035f, 0.07f, 0.16f);
             RenderSettings.ambientEquatorColor = new Color(0.015f, 0.03f, 0.08f);
@@ -91,7 +103,8 @@ namespace NeoRumaz.Runtime
             BuildItemPool();
             hud = gameObject.AddComponent<NeoRumazHud>();
             hud.Configure(this);
-            SpawnOpeningWave();
+            isRunning = false;
+            hud.ShowMainMenu();
         }
 
         private void Update()
@@ -107,7 +120,7 @@ namespace NeoRumaz.Runtime
             nileRushSeconds = Mathf.Max(0f, nileRushSeconds - dt);
             shieldSeconds = Mathf.Max(0f, shieldSeconds - dt);
             if (shieldVisual != null) shieldVisual.gameObject.SetActive(shieldSeconds > 0f);
-            runSpeed = Mathf.Min(28f, 14f + runDistance * 0.014f) * (nileRushSeconds > 0f ? 1.4f : 1f);
+            runSpeed = Mathf.Min(config.MaximumRunSpeed, config.InitialRunSpeed + runDistance * 0.014f) * (nileRushSeconds > 0f ? config.NileRushSpeedMultiplier : 1f);
             runDistance += runSpeed * dt;
             MovePlayer(dt);
             MoveRoad(dt);
@@ -125,14 +138,14 @@ namespace NeoRumaz.Runtime
 
         public void RequestJump()
         {
-            if (isRunning && playerController.isGrounded) verticalVelocity = 8.2f;
+            if (isRunning && playerController.isGrounded) verticalVelocity = config.JumpVelocity;
         }
 
         public void RequestLane(int direction)
         {
             if (!isRunning) return;
             lane = Mathf.Clamp(lane + direction, 0, 2);
-            targetLaneX = (lane - 1) * LaneWidth;
+            targetLaneX = (lane - 1) * config.LaneWidth;
         }
 
         public void RestartRun()
@@ -143,13 +156,44 @@ namespace NeoRumaz.Runtime
             player.position = new Vector3(0f, 0.05f, 0f);
             verticalVelocity = 0f;
             runDistance = 0f;
-            runSpeed = 14f;
+            runSpeed = config.InitialRunSpeed;
             shieldSeconds = 0f;
             nileRushSeconds = 0f;
             contractCredits = 0;
             isRunning = true;
             SpawnOpeningWave();
             hud.HideGameOver();
+        }
+
+        public void StartNewRun()
+        {
+            RestartRun();
+            hud.ShowRunHud();
+        }
+
+        public ShopResult TrySelectCharacter(int characterIndex)
+        {
+            ShopResult result = progression.TrySelectOrUnlock(characterIndex);
+            if (result == ShopResult.Selected || result == ShopResult.UnlockedAndSelected) ApplyCharacterAccent();
+            return result;
+        }
+
+        public void SetAudio(bool isEnabled)
+        {
+            progression.SetAudio(isEnabled);
+        }
+
+        public void RequestDailyReward()
+        {
+            monetization.RequestRewarded(AdPlacement.RewardedDailyCredits, delegate(AdOutcome outcome)
+            {
+                if (outcome == AdOutcome.Completed)
+                {
+                    progression.AddCredits(50);
+                    hud.ShowToast("DAILY CREDIT REWARD  +50");
+                }
+                else hud.ShowToast("REWARDED AD IS NOT CONFIGURED");
+            });
         }
 
         private void HandleInput()
@@ -182,7 +226,7 @@ namespace NeoRumaz.Runtime
 
         private void HandleSwipe(Vector2 delta)
         {
-            if (delta.magnitude < 42f) return;
+            if (delta.magnitude < config.SwipeThresholdPixels) return;
             if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y)) RequestLane(delta.x > 0f ? 1 : -1);
             else if (delta.y > 0f) RequestJump();
         }
@@ -224,7 +268,7 @@ namespace NeoRumaz.Runtime
                 segment.position = new Vector3(0f, 0f, -RoadSegmentLength + index * RoadSegmentLength);
                 CreatePrimitive(PrimitiveType.Cube, "Road", segment, new Vector3(0f, -0.22f, 0f), new Vector3(10.3f, 0.28f, RoadSegmentLength), asphalt);
                 for (int divider = -1; divider <= 1; divider += 2)
-                    CreatePrimitive(PrimitiveType.Cube, "Lane Light", segment, new Vector3(divider * LaneWidth * 0.5f, -0.045f, 0f), new Vector3(0.055f, 0.035f, RoadSegmentLength), cyan);
+                    CreatePrimitive(PrimitiveType.Cube, "Lane Light", segment, new Vector3(divider * config.LaneWidth * 0.5f, -0.045f, 0f), new Vector3(0.055f, 0.035f, RoadSegmentLength), cyan);
                 for (int side = -1; side <= 1; side += 2)
                 {
                     CreatePrimitive(PrimitiveType.Cube, "Guardrail", segment, new Vector3(side * 5.02f, 0.35f, 0f), new Vector3(0.25f, 0.75f, RoadSegmentLength), rail);
@@ -250,18 +294,26 @@ namespace NeoRumaz.Runtime
             playerController.radius = 0.38f;
             playerController.center = new Vector3(0f, 1.22f, 0f);
             Material suit = MakeMaterial("Courier Suit", "#182536", "#0D2338");
-            Material cyan = MakeMaterial("Courier Glow", "#0A6A82", "#42E8FF");
+            courierAccentMaterial = MakeMaterial("Courier Glow", SelectedCharacter.Accent, SelectedCharacter.Accent);
             Material visor = MakeMaterial("Courier Visor", "#123142", "#6DF6FF");
             Transform torso = CreatePrimitive(PrimitiveType.Capsule, "Courier Torso", player, new Vector3(0f, 1.15f, 0f), new Vector3(0.72f, 1.18f, 0.58f), suit);
             CreatePrimitive(PrimitiveType.Sphere, "Courier Head", torso, new Vector3(0f, 0.94f, 0.01f), new Vector3(0.54f, 0.54f, 0.54f), suit);
             CreatePrimitive(PrimitiveType.Cube, "Courier Visor", torso, new Vector3(0f, 0.94f, -0.28f), new Vector3(0.4f, 0.11f, 0.06f), visor);
-            CreatePrimitive(PrimitiveType.Cube, "Back Mark", torso, new Vector3(0f, 0.18f, 0.31f), new Vector3(0.38f, 0.26f, 0.06f), cyan);
+            CreatePrimitive(PrimitiveType.Cube, "Back Mark", torso, new Vector3(0f, 0.18f, 0.31f), new Vector3(0.38f, 0.26f, 0.06f), courierAccentMaterial);
             runnerLimbs.Add(CreatePrimitive(PrimitiveType.Capsule, "Left Arm", torso, new Vector3(-0.48f, 0.35f, 0f), new Vector3(0.18f, 0.55f, 0.18f), suit));
             runnerLimbs.Add(CreatePrimitive(PrimitiveType.Capsule, "Right Arm", torso, new Vector3(0.48f, 0.35f, 0f), new Vector3(0.18f, 0.55f, 0.18f), suit));
             runnerLimbs.Add(CreatePrimitive(PrimitiveType.Capsule, "Left Leg", player, new Vector3(-0.22f, 0.52f, 0f), new Vector3(0.22f, 0.66f, 0.22f), suit));
             runnerLimbs.Add(CreatePrimitive(PrimitiveType.Capsule, "Right Leg", player, new Vector3(0.22f, 0.52f, 0f), new Vector3(0.22f, 0.66f, 0.22f), suit));
             shieldVisual = CreatePrimitive(PrimitiveType.Cylinder, "Scarab Shield", player, new Vector3(0f, 1.05f, 0f), new Vector3(1.35f, 0.03f, 1.35f), MakeMaterial("Shield Glow", "#8D6511", "#FFC857"));
             shieldVisual.gameObject.SetActive(false);
+        }
+
+        private void ApplyCharacterAccent()
+        {
+            if (courierAccentMaterial == null) return;
+            Color accent = SelectedCharacter.Accent;
+            courierAccentMaterial.color = accent;
+            courierAccentMaterial.SetColor("_EmissionColor", accent);
         }
 
         private void BuildItemPool()
@@ -358,23 +410,23 @@ namespace NeoRumaz.Runtime
             }
             if (item.Type == RunnerItemType.Credit)
             {
-                credits += 1;
+                progression.AddCredits(1);
                 contractCredits += 1;
-                if (contractCredits >= ContractTarget)
+                if (contractCredits >= config.ContractTargetCredits)
                 {
-                    credits += 3;
+                    progression.AddCredits(config.ContractCompletionBonus);
                     contractCredits = 0;
                     hud.ShowToast("CAIRO CONTRACT COMPLETE  +3 CREDITS");
                 }
             }
             else if (item.Type == RunnerItemType.Shield)
             {
-                shieldSeconds = 6f;
+                shieldSeconds = config.ShieldDurationSeconds;
                 hud.ShowToast("SCARAB SHIELD ONLINE");
             }
             else if (item.Type == RunnerItemType.NileRush)
             {
-                nileRushSeconds = 5f;
+                nileRushSeconds = config.NileRushDurationSeconds;
                 hud.ShowToast("NILE RUSH  //  FAST LANE");
             }
             DisableItem(item);
@@ -434,7 +486,7 @@ namespace NeoRumaz.Runtime
             RunnerItem item = items.Find(candidate => !candidate.Active && candidate.Type == type);
             if (item == null) item = items.Find(candidate => candidate.Type == type);
             if (item == null) return;
-            item.Root.transform.position = new Vector3((laneIndex - 1) * LaneWidth, 0f, z);
+            item.Root.transform.position = new Vector3((laneIndex - 1) * config.LaneWidth, 0f, z);
             item.Root.transform.rotation = Quaternion.identity;
             item.Active = true;
             item.Root.SetActive(true);
@@ -449,7 +501,9 @@ namespace NeoRumaz.Runtime
         private void Crash()
         {
             isRunning = false;
-            hud.ShowGameOver(Score, credits);
+            progression.RecordRun(Score);
+            monetization.TryShowControlledInterstitial(delegate(AdOutcome outcome) { });
+            hud.ShowGameOver(Score, Credits);
         }
 
         private void AnimateRunner(float dt)
@@ -497,6 +551,11 @@ namespace NeoRumaz.Runtime
             Color emission;
             ColorUtility.TryParseHtmlString(colorHex, out baseColor);
             ColorUtility.TryParseHtmlString(emissionHex, out emission);
+            return MakeMaterial(title, baseColor, emission);
+        }
+
+        private Material MakeMaterial(string title, Color baseColor, Color emission)
+        {
             Material material = new Material(Shader.Find("Standard"));
             material.name = title;
             material.color = baseColor;

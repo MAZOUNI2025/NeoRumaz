@@ -1,0 +1,35 @@
+# Unity generated directories
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Unity / IDE generated files
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Android build outputs and signing material
+*.apk
+*.aab
+*.keystore
+*.jks
+*.keystorepass
+gradleOut/
+
+# Local environment and provider configuration
+local.properties
+Assets/StreamingAssets/Monetization.local.json
+Assets/StreamingAssets/Monetization.production.json
