@@ -1,29 +1,63 @@
-# NeoRumaz Unity Source Audit
+# NeoRumaz Unity Build-Readiness Audit
 
 **Audit date:** 25 August 2026  
-**Scope:** `Unity/NeoRumaz/` source project only. This is not runtime, device, APK, or AAB verification.
+**Scope:** Source-level audit of `Unity/NeoRumaz/`. Unity Editor, Android Build Support, Android SDK/NDK/OpenJDK, emulator, and Android device tooling are not available in this workspace.
 
-## Static Validation Result
+## Status Gate
 
-| Area | Result | Evidence |
+| State | Status | Meaning |
 | --- | --- | --- |
-| C# syntax | Pass | Tree-sitter parsed all 21 C# files in `Assets/` with no syntax errors. |
-| Unity baseline | Pass | `ProjectVersion.txt` remains on Unity `2020.3.26f1`, matching LetsRun's audited source baseline. |
-| Scene ordering | Pass | `Assets/NeoRumaz/Scenes/NeoRumazGame.unity` is the first build scene, ahead of preserved LetsRun scenes. |
-| Android source settings | Pass | Product `NeoRumaz`, package ID `com.neorumaz.runner`, Android minimum API level 24. |
-| Required assets | Pass | Production scene, runtime prefab, gameplay configuration, prefab catalog, monetization configuration, and Editor validator all exist. |
-| Unity metadata | Pass | All NeoRumaz C#, prefab, scene, and ScriptableObject assets have `.meta` files; no duplicate GUIDs were found. |
-| Prefab catalog links | Pass | Each catalog GUID resolves to a NeoRumaz source asset. |
-| Generated files | Pass | `Library`, `Temp`, `Obj`, `Logs`, and `UserSettings` are absent and ignored. |
-| Legacy live commerce packages | Pass | Unity Ads and Unity Purchasing are absent from `manifest.json` and `packages-lock.json`. |
-| Live provider calls | Pass | No C# references to `UnityEngine.Advertisements`, `Advertisement.Initialize`, `Advertisement.Show`, or `UnityPurchasing` were found. |
+| **SOURCE READY** | **Yes, statically audited** | Repository structure, source metadata, package JSON, scene path, Android source settings, and C# syntax have been checked. |
+| **BUILD READY** | **Pending Unity Build Automation import** | The source is configured for import, but only Unity Editor/Build Automation can confirm package resolution and compilation. |
+| **APK BUILT** | **No** | No APK or AAB has been generated or inspected. |
+| **ANDROID RUNTIME VERIFIED** | **No** | No device or emulator has run the game. |
 
-## What This Audit Does Not Prove
+## Required Build Automation Root
 
-The workspace does not have Unity Editor, Android Build Support, Android SDK/NDK/OpenJDK, an Android emulator, or a device bridge. Therefore this audit **does not prove** that Unity imports the project without error, that generated scene/prefab YAML renders as intended, that game controls work on a device, that the project meets performance requirements, or that an APK/AAB can be built.
+> **Unity Build Automation Project Subdirectory must be `Unity/NeoRumaz`.**
 
-The project includes `NeoRumaz > Validate Project Source`, an Editor pre-build validator that repeats the critical scene, asset, economy, and monetization policy checks once Unity is available.
+That folder directly contains `Assets/`, `Packages/`, and `ProjectSettings/`. The earlier `unrecognized project` failure is consistent with the dashboard pointing at the repository root or another incorrect subdirectory. This dashboard selection cannot be changed from Git; see [`UNITY_BUILD_CONFIGURATION.md`](UNITY_BUILD_CONFIGURATION.md).
 
-## Required Local Follow-up
+## Final Source Checklist
 
-Open `Unity/NeoRumaz/` in Unity 2020.3.26f1 with Android Build Support. Let Unity resolve packages and regenerate local artifacts, run **NeoRumaz > Validate Project Source**, open `NeoRumazGame`, then play-test, profile, and build a signed Android artifact. Do not enable either monetization switch until a real provider adapter has been integrated and tested on devices.
+| Check | Status | Static evidence |
+| --- | --- | --- |
+| Correct Unity project root | [x] | `Unity/NeoRumaz/` directly contains the three Unity project directories. |
+| Assets directory | [x] | `Unity/NeoRumaz/Assets/` exists. |
+| Packages directory | [x] | `Unity/NeoRumaz/Packages/` exists. |
+| ProjectSettings directory | [x] | `Unity/NeoRumaz/ProjectSettings/` exists. |
+| ProjectVersion.txt | [x] | Declares Unity `2020.3.26f1 (7298b473bc1a)`. |
+| Valid package JSON | [x] | `manifest.json` parses as JSON. |
+| Valid packages lock | [x] | `packages-lock.json` parses as JSON. |
+| Build scene exists | [x] | `Assets/NeoRumaz/Scenes/NeoRumazGame.unity` exists. |
+| Build scene configured | [x] | `NeoRumazGame` is the first enabled build scene. |
+| C# static validation | [x] | Tree-sitter parsed 21 C# files without syntax errors. |
+| Meta/GUID validation | [x] | Required C#/scene/prefab/asset meta files exist; no duplicate NeoRumaz GUIDs found. |
+| Prefab validation | [x] | Runtime prefab, gameplay prefabs, catalog references, and script GUID links resolve statically. |
+| Android configuration | [x] | Landscape/full screen, API 24 minimum, auto target SDK, IL2CPP, ARMv7 + ARM64, no forced Internet permission. |
+| Bundle ID | [x] | `com.neorumaz.runner`. |
+| No obsolete Ads/Purchasing references | [x] | Neither package nor live C# provider call remains. |
+| No generated Unity folders committed | [x] | `Library`, `Temp`, `Obj`, `Logs`, and `UserSettings` are absent and ignored. |
+| Build Automation configuration documented | [x] | `UNITY_BUILD_CONFIGURATION.md` records the required dashboard values. |
+
+## Source-Side Findings and Fixes
+
+| Finding | Source-side action |
+| --- | --- |
+| Unity Build Automation failed to identify the project. | Verified the Unity root and documented the exact dashboard Project Subdirectory: `Unity/NeoRumaz`. |
+| Android target architectures were ARMv7-only. | Set `AndroidTargetArchitectures: 3` for ARMv7 + ARM64. |
+| Android scripting backend was unspecified/default. | Set the Android backend to IL2CPP, which is appropriate for the configured ARM64 target. |
+| A non-empty legacy PS4 passcode existed in `ProjectSettings.asset`. | Cleared the value so no secret-like legacy value remains committed. |
+| Legacy Unity Ads/Purchasing entries previously existed. | Kept both absent from manifest and lock; the provider-neutral monetization architecture remains disabled by default. |
+
+## What Was Actually Verified
+
+The audit inspected the physical project tree, Unity version declaration, build-scene path/order, package JSON syntax and direct-package uniqueness, C# syntax, required asset presence, meta completeness, GUID uniqueness, catalog GUID resolution, generated-directory absence, advertisement/purchasing references, Android serialized fields, and sensitive-text checks. No Unity compilation was performed.
+
+## What Still Requires Unity Editor
+
+Unity Editor must import `Unity/NeoRumaz/`, resolve packages, compile every assembly against Unity `2020.3.26f1`, deserialize the scene and prefabs, run `NeoRumaz > Validate Project Source`, and execute an Android build. Build Automation must also be configured with the exact Project Subdirectory above.
+
+## What Still Requires a Real Android Device
+
+A real device test must verify installation, launch, touch and swipe input, lane movement, jump timing, rendering, frame pacing, audio, safe-area behavior, persistence, crash handling, and final APK signing/compatibility. Monetization remains intentionally unverified because no Android-compatible provider SDK or device test has been integrated.
