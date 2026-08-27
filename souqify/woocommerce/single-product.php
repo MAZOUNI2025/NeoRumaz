@@ -1,1 +1,0 @@
-<?php defined( 'ABSPATH' ) || exit; get_header( 'shop' ); while ( have_posts() ) : the_post(); ?><div class="container single-product-page"><div class="shop-breadcrumbs"><?php souqify_breadcrumbs(); ?></div><?php wc_get_template_part( 'content', 'single-product' ); ?></div><?php endwhile; get_footer( 'shop' ); ?>

@@ -1,1 +1,0 @@
-<section class="brands-section"><div class="container"><div class="section-heading"><h2><?php esc_html_e( 'Trusted by professionals', 'souqify' ); ?></h2></div><div class="brands-strip"><span>MAKITA</span><span>DEWALT</span><span>BOSCH</span><span>STANLEY</span><span>Milwaukee</span><span>BLACK+DECKER</span></div></div></section>

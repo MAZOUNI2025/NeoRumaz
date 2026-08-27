@@ -1,1 +1,0 @@
-<?php get_header(); ?><div class="container content-layout"><div class="primary-content"><article <?php post_class( 'page-entry' ); ?>><header class="entry-header"><h1><?php the_title(); ?></h1></header><div class="entry-content"><?php while ( have_posts() ) : the_post(); the_content(); endwhile; ?></div></article></div><?php get_sidebar(); ?></div><?php get_footer(); ?>
